@@ -1453,6 +1453,18 @@ s32 USBStorage_devsectors_2(void) {
 	return USBStorage_Get_Capacity(2, &tmp);
 }
 
+DISC_INTERFACE usb2mass_ops = {
+	.sectors = (FN_MEDIUM_DEVSECTORS) & USBStorage_devsectors_0,
+	.readSectors = (FN_MEDIUM_READSECTORS) & USBStorage_Read_Sectors_0,
+	.writeSectors = (FN_MEDIUM_WRITESECTORS) & USBStorage_Write_Sectors_0,
+	.clearStatus = (FN_MEDIUM_CLEARSTATUS) & USBStorage_True,
+	.shutdown = (FN_MEDIUM_SHUTDOWN) & USBStorage_True,
+	.isInserted = (FN_MEDIUM_ISINSERTED) & USBStorage_Inserted_0,
+	.startup = (FN_MEDIUM_STARTUP) & USBStorage_True,
+	.ioType = FEATURE_XENON_USB,
+	.features = FEATURE_MEDIUM_CANREAD | FEATURE_MEDIUM_CANWRITE | FEATURE_XENON_USB,
+};
+
 DISC_INTERFACE usb2mass_ops_0 = {
 	.sectors = (FN_MEDIUM_DEVSECTORS) & USBStorage_devsectors_0,
 	.readSectors = (FN_MEDIUM_READSECTORS) & USBStorage_Read_Sectors_0,

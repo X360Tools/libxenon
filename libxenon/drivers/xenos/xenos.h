@@ -1,3 +1,4 @@
+
 #ifndef __xenos_xenos_h
 #define __xenos_xenos_h
 
@@ -32,8 +33,9 @@ extern "C" {
 #define	D1GRPH_Y_START                 0x6130
 #define	D1GRPH_X_END                   0x6134
 #define	D1GRPH_Y_END                   0x6138
-#define	D1GRPH_PRIMARY_SURFACE_ADDRESS 0x6110
+#define	D1GRPH_PRIMARY_SURFACE_ADDRESS 0x6110  
 #define	D1GRPH_ENABLE                  0x6100
+#define DC_LUT_PWL_DATA                0x6490
 #define	AVIVO_D1SCL_UPDATE             0x65cc
 #define	AVIVO_D1SCL_SCALER_ENABLE      0x6590
 #define AVIVO_D1MODE_VIEWPORT_START    0x6580

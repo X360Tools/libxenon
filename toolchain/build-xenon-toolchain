@@ -154,7 +154,7 @@ function zlib_install
 {
 	if [ ! -f "$ZLIB.tar.gz" ]; then
 		echo -e "Downloading $ZLIB.tar.gz"
-		wget -c http://zlib.net/$ZLIB.tar.gz || exit 0
+		wget -c http://download.sourceforge.net/libpng/$ZLIB.tar.gz || exit 0
 	fi;
 
 	echo -e "Extracting zlib..."
@@ -225,7 +225,7 @@ function bzip2_install
 {
 	if [ ! -f "$BZIP2.tar.gz" ]; then
 		echo -e "Downloading $BZIP2.tar.gz"
-		wget -c http://bzip.org/1.0.6/$BZIP2.tar.gz || exit 0
+		wget -c http://download.sourceforge.net/bzip2/$BZIP2.tar.gz || exit 0
 	fi;
 
 	echo -e "Extracting bzip2..."

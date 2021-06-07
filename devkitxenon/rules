@@ -19,6 +19,10 @@ LDSCRIPT := $(DEVKITXENON)/app.lds
 	@echo [$(notdir $<)]
 	@$(CXX) -MMD -MP -MF $(DEPSDIR)/$*.d $(CXXFLAGS) -c $< -o $@
 	
+%.o: %.cc
+	@echo [$(notdir $<)]
+	@$(CXX) -MMD -MP -MF $(DEPSDIR)/$*.d $(CXXFLAGS) -c $< -o $@
+
 %.o: %.c
 	@echo [$(notdir $<)]
 	@$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d $(CFLAGS) -c $< -o $@

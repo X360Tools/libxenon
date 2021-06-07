@@ -11,7 +11,6 @@ extern "C" {
 
 #include <sys/types.h>
 
-typedef __uint32_t fsblkcnt_t;
 typedef __uint32_t fsfilcnt_t;
 
 struct statvfs {

@@ -1,13 +1,14 @@
+#include <console/console.h>
+#include <ppc/cache.h>
+#include <ppc/register.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <console/console.h>
-#include <xenon_uart/xenon_uart.h>
+#include <time/time.h>
 #include <xenon_smc/xenon_smc.h>
-#include <ppc/cache.h>
-#include <ppc/register.h>
-#include <xetypes.h>
+#include <xenon_uart/xenon_uart.h>
 #include <xenos/xenos.h>
+#include <xetypes.h>
 
 #define CPU_STACK_TRACE_DEPTH		10
 

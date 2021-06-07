@@ -854,7 +854,7 @@ int close(int fileDesc) {
  */
 
 /* CWD always start with "/" */
-static char _current_working_directory [MAXPATHLEN] = "/";
+static char _current_working_directory [PATH_MAX] = "/";
 
 #define DIRECTORY_SEPARATOR_CHAR '/'
 const char DIRECTORY_SEPARATOR[] = "/";
@@ -954,20 +954,20 @@ int chdir(const char *path) {
 
 	int dev;
 	const char *pathPosition;
-	char temp_cwd [MAXPATHLEN];
+	char temp_cwd [PATH_MAX];
 
 	/* Make sure the path is short enough */
-	if (strnlen(path, MAXPATHLEN + 1) >= MAXPATHLEN) {
+	if (strnlen(path, PATH_MAX + 1) >= PATH_MAX) {
 		r->_errno = ENAMETOOLONG;
 		return -1;
 	}
 
 	if (strchr(path, ':') != NULL) {
-		strncpy(temp_cwd, path, MAXPATHLEN);
+		strncpy(temp_cwd, path, PATH_MAX);
 		/* Move path past device name */
 		path = strchr(path, ':') + 1;
 	} else {
-		strncpy(temp_cwd, _current_working_directory, MAXPATHLEN);
+		strncpy(temp_cwd, _current_working_directory, PATH_MAX);
 	}
 
 	pathPosition = strchr(temp_cwd, ':') + 1;
@@ -979,7 +979,7 @@ int chdir(const char *path) {
 	}
 
 	/* Concatenate the path to the CWD */
-	if (_concatenate_path(r, temp_cwd, path, MAXPATHLEN) == -1) {
+	if (_concatenate_path(r, temp_cwd, path, PATH_MAX) == -1) {
 		return -1;
 	}
 
@@ -998,7 +998,7 @@ int chdir(const char *path) {
 
 	/* Since it worked, set the new CWD and default device */
 	setDefaultDevice(dev);
-	strncpy(_current_working_directory, temp_cwd, MAXPATHLEN);
+	strncpy(_current_working_directory, temp_cwd, PATH_MAX);
 
 	return 0;
 }
@@ -1012,7 +1012,7 @@ char *getcwd(char * buf, size_t size) {
 		return NULL;
 	}
 
-	if (size < (strnlen(_current_working_directory, MAXPATHLEN) + 1)) {
+	if (size < (strnlen(_current_working_directory, PATH_MAX) + 1)) {
 		r->_errno = ERANGE;
 		return NULL;
 	}
@@ -1181,7 +1181,7 @@ int closedir(DIR *dirp) {
 
 struct dirent* readdir(DIR *dirp) {
 	struct stat st;
-	char filename[MAXPATHLEN];
+	char filename[PATH_MAX];
 	int res;
 	int olderrno = errno;
 
@@ -1204,7 +1204,7 @@ struct dirent* readdir(DIR *dirp) {
 	// We've moved forward in the directory
 	dirp->position += 1;
 
-	if (strnlen(filename, MAXPATHLEN) >= sizeof (dirp->fileData.d_name)) {
+	if (strnlen(filename, PATH_MAX) >= sizeof (dirp->fileData.d_name)) {
 		errno = EOVERFLOW;
 		return NULL;
 	}
@@ -1228,7 +1228,7 @@ void rewinddir(DIR *dirp) {
 }
 
 void seekdir(DIR *dirp, long int loc) {
-	char filename[MAXPATHLEN];
+	char filename[PATH_MAX];
 
 	if (!dirp || loc < 0) {
 		return;

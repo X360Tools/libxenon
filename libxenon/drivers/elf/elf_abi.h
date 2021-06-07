@@ -25,11 +25,10 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <stdint.h>
+
 #ifndef _ELF_ABI_H
 #define _ELF_ABI_H
-
-typedef unsigned long int uint32_t;
-typedef unsigned short    uint16_t;
 
 typedef uint32_t	Elf32_Addr;	/* Unsigned program address */
 typedef uint32_t	Elf32_Off;	/* Unsigned file offset */

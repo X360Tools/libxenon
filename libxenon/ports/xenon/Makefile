@@ -1,4 +1,4 @@
-CROSS=xenon
+CROSS?=xenon
 CC=$(CROSS)-gcc
 CXX=$(CROSS)-g++
 OBJCOPY=$(CROSS)-objcopy

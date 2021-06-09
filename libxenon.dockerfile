@@ -10,3 +10,5 @@ RUN ./build-xenon-toolchain libxenon || (cat build.log; exit 1)
 
 RUN echo "[+] Installing dependencies"
 RUN ./build-xenon-toolchain libs || (cat build.log; exit 1)
+
+CMD ["/bin/bash", "-l"]

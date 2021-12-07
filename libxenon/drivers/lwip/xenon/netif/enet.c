@@ -399,10 +399,26 @@ enet_input(struct netif *netif)
 
 	ethhdr = p->payload;
 
-	/* pass to network layer */
-	if (ethernet_input(p, netif) != ERR_OK) {
+	switch (htons(ethhdr->type))
+	{
+		/* IP packet? */
+	case ETHTYPE_IP:
+		/* update ARP table */
+		etharp_ip_input(netif, p);
+		/* skip Ethernet header */
+		pbuf_header(p, -((s16_t)sizeof(struct eth_hdr)));
+		/* pass to network layer */
+		netif->input(p, netif);
+		break;
+
+	case ETHTYPE_ARP:
+		/* pass p to ARP module	*/
+		etharp_arp_input(netif, context->ethaddr, p);
+		break;
+	default:
 		pbuf_free(p);
 		p = NULL;
+		break;
 	}
 }
 

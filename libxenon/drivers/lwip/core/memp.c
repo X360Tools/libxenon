@@ -176,20 +176,19 @@ static u8_t memp_memory[MEM_ALIGNMENT - 1
 
 #if MEMP_SANITY_CHECK
 /**
- * Check that memp-lists don't form a circle, using "Floyd's cycle-finding algorithm".
+ * Check that memp-lists don't form a circle
  */
 static int
 memp_sanity(void)
 {
-  s16_t i;
-  struct memp *t, *h;
+  s16_t i, c;
+  struct memp *m, *n;
 
   for (i = 0; i < MEMP_MAX; i++) {
-    t = memp_tab[i];
-    if(t != NULL) {
-      for (h = t->next; (t != NULL) && (h != NULL); t = t->next,
-        h = (((h->next != NULL) && (h->next->next != NULL)) ? h->next->next : NULL)) {
-        if (t == h) {
+    for (m = memp_tab[i]; m != NULL; m = m->next) {
+      c = 1;
+      for (n = memp_tab[i]; n != NULL; n = n->next) {
+        if (n == m && --c < 0) {
           return 0;
         }
       }

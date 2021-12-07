@@ -46,14 +46,12 @@
 #include "lwip/def.h"
 #include "lwip/mem.h"
 #include "lwip/memp.h"
+#include "lwip/sys.h"
 #include "lwip/ip_addr.h"
 #include "lwip/netif.h"
 #include "lwip/inet_chksum.h"
 #include "lwip/stats.h"
 #include "lwip/snmp.h"
-#if LWIP_TCP_TIMESTAMPS
-#include "lwip/sys.h"
-#endif
 
 #include <string.h>
 
@@ -133,7 +131,6 @@ tcp_send_fin(struct tcp_pcb *pcb)
     if ((TCPH_FLAGS(last_unsent->tcphdr) & (TCP_SYN | TCP_FIN | TCP_RST)) == 0) {
       /* no SYN/FIN/RST flag in the header, we can add the FIN flag */
       TCPH_SET_FLAG(last_unsent->tcphdr, TCP_FIN);
-      pcb->flags |= TF_FIN;
       return ERR_OK;
     }
   }
@@ -229,7 +226,7 @@ tcp_pbuf_prealloc(pbuf_layer layer, u16_t length, u16_t max_length,
   LWIP_UNUSED_ARG(apiflags);
   LWIP_UNUSED_ARG(first_seg);
   /* always create MSS-sized pbufs */
-  alloc = max_length;
+  alloc = TCP_MSS;
 #else /* LWIP_NETIF_TX_SINGLE_PBUF */
   if (length < max_length) {
     /* Should we allocate an oversized pbuf, or just the minimum
@@ -369,8 +366,6 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
   u16_t concat_chksummed = 0;
 #endif /* TCP_CHECKSUM_ON_COPY */
   err_t err;
-  /* don't allocate segments bigger than half the maximum window we ever received */
-  u16_t mss_local = LWIP_MIN(pcb->mss, pcb->snd_wnd_max/2);
 
 #if LWIP_NETIF_TX_SINGLE_PBUF
   /* Always copy to try to create single pbufs for TX */
@@ -429,7 +424,7 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
 
     /* Usable space at the end of the last unsent segment */
     unsent_optlen = LWIP_TCP_OPT_LENGTH(last_unsent->flags);
-    space = mss_local - (last_unsent->len + unsent_optlen);
+    space = pcb->mss - (last_unsent->len + unsent_optlen);
 
     /*
      * Phase 1: Copy data directly into an oversized pbuf.
@@ -480,7 +475,7 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
           goto memerr;
         }
 #if TCP_OVERSIZE_DBGCHECK
-        last_unsent->oversize_left += oversize;
+        last_unsent->oversize_left = oversize;
 #endif /* TCP_OVERSIZE_DBGCHECK */
         TCP_DATA_COPY2(concat_p->payload, (u8_t*)arg + pos, seglen, &concat_chksum, &concat_chksum_swapped);
 #if TCP_CHECKSUM_ON_COPY
@@ -522,7 +517,7 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
   while (pos < len) {
     struct pbuf *p;
     u16_t left = len - pos;
-    u16_t max_len = mss_local - optlen;
+    u16_t max_len = pcb->mss - optlen;
     u16_t seglen = left > max_len ? max_len : left;
 #if TCP_CHECKSUM_ON_COPY
     u16_t chksum = 0;
@@ -532,7 +527,7 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
     if (apiflags & TCP_WRITE_FLAG_COPY) {
       /* If copy is set, memory should be allocated and data copied
        * into pbuf */
-      if ((p = tcp_pbuf_prealloc(PBUF_TRANSPORT, seglen + optlen, mss_local, &oversize, pcb, apiflags, queue == NULL)) == NULL) {
+      if ((p = tcp_pbuf_prealloc(PBUF_TRANSPORT, seglen + optlen, pcb->mss, &oversize, pcb, apiflags, queue == NULL)) == NULL) {
         LWIP_DEBUGF(TCP_OUTPUT_DEBUG | 2, ("tcp_write : could not allocate memory for pbuf copy size %"U16_F"\n", seglen));
         goto memerr;
       }
@@ -635,8 +630,6 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
     }
     last_unsent->len += oversize_used;
 #if TCP_OVERSIZE_DBGCHECK
-    LWIP_ASSERT("last_unsent->oversize_left >= oversize_used",
-                last_unsent->oversize_left >= oversize_used);
     last_unsent->oversize_left -= oversize_used;
 #endif /* TCP_OVERSIZE_DBGCHECK */
   }
@@ -817,6 +810,7 @@ tcp_enqueue_flags(struct tcp_pcb *pcb, u8_t flags)
 
   return ERR_OK;
 }
+ 
 
 #if LWIP_TCP_TIMESTAMPS
 /* Build a timestamp option (12 bytes long) at the specified options pointer)
@@ -902,10 +896,6 @@ tcp_output(struct tcp_pcb *pcb)
 #if TCP_CWND_DEBUG
   s16_t i = 0;
 #endif /* TCP_CWND_DEBUG */
-
-  /* pcb->state LISTEN not allowed here */
-  LWIP_ASSERT("don't call tcp_output for listen-pcbs",
-    pcb->state != LISTEN);
 
   /* First, check if we are invoked by the TCP input processing
      code. If so, we do not output anything. Instead, we rely on the
@@ -1035,6 +1025,13 @@ tcp_output(struct tcp_pcb *pcb)
   }
 #endif /* TCP_OVERSIZE */
 
+  if (seg != NULL && pcb->persist_backoff == 0 && 
+      ntohl(seg->tcphdr->seqno) - pcb->lastack + seg->len > pcb->snd_wnd) {
+    /* prepare for persist timer */
+    pcb->persist_cnt = 0;
+    pcb->persist_backoff = 1;
+  }
+
   pcb->flags &= ~TF_NAGLEMEMERR;
   return ERR_OK;
 }
@@ -1066,15 +1063,10 @@ tcp_output_segment(struct tcp_seg *seg, struct tcp_pcb *pcb)
 
   /* Add any requested options.  NB MSS option is only set on SYN
      packets, so ignore it here */
+  LWIP_ASSERT("seg->tcphdr not aligned", ((mem_ptr_t)seg->tcphdr % MEM_ALIGNMENT) == 0);
   opts = (u32_t *)(void *)(seg->tcphdr + 1);
   if (seg->flags & TF_SEG_OPTS_MSS) {
-    u16_t mss;
-#if TCP_CALCULATE_EFF_SEND_MSS
-    mss = tcp_eff_send_mss(TCP_MSS, &pcb->remote_ip);
-#else /* TCP_CALCULATE_EFF_SEND_MSS */
-    mss = TCP_MSS;
-#endif /* TCP_CALCULATE_EFF_SEND_MSS */
-    *opts = TCP_BUILD_MSS_OPTION(mss);
+    TCP_BUILD_MSS_OPTION(*opts);
     opts += 1;
   }
 #if LWIP_TCP_TIMESTAMPS
@@ -1252,7 +1244,6 @@ tcp_rexmit_rto(struct tcp_pcb *pcb)
   pcb->unsent = pcb->unacked;
   /* unacked queue is now empty */
   pcb->unacked = NULL;
-  /* last unsent hasn't changed, no need to reset unsent_oversize */
 
   /* increment number of retransmissions */
   ++pcb->nrtx;
@@ -1293,12 +1284,6 @@ tcp_rexmit(struct tcp_pcb *pcb)
   }
   seg->next = *cur_seg;
   *cur_seg = seg;
-#if TCP_OVERSIZE
-  if (seg->next == NULL) {
-    /* the retransmitted segment is last in unsent, so reset unsent_oversize */
-    pcb->unsent_oversize = 0;
-  }
-#endif /* TCP_OVERSIZE */
 
   ++pcb->nrtx;
 
@@ -1455,11 +1440,9 @@ tcp_zero_window_probe(struct tcp_pcb *pcb)
     TCPH_FLAGS_SET(tcphdr, TCP_ACK | TCP_FIN);
   } else {
     /* Data segment, copy in one byte from the head of the unacked queue */
+    struct tcp_hdr *thdr = (struct tcp_hdr *)seg->p->payload;
     char *d = ((char *)p->payload + TCP_HLEN);
-    /* Depending on whether the segment has already been sent (unacked) or not
-       (unsent), seg->p->payload points to the IP header or TCP header.
-       Ensure we copy the first TCP data byte: */
-    pbuf_copy_partial(seg->p, d, 1, seg->p->tot_len - seg->len);
+    pbuf_copy_partial(seg->p, d, 1, TCPH_HDRLEN(thdr) * 4);
   }
 
 #if CHECKSUM_GEN_TCP

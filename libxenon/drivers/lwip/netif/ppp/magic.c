@@ -53,7 +53,7 @@
 
 #if PPP_SUPPORT
 
-#include "ppp_impl.h"
+#include "ppp.h"
 #include "randm.h"
 #include "magic.h"
 

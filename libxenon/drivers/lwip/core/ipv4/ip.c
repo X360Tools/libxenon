@@ -83,7 +83,7 @@
          || (LWIP_IP_ACCEPT_UDP_PORT(port)))
 #elif defined(LWIP_IP_ACCEPT_UDP_PORT) /* LWIP_DHCP && defined(LWIP_IP_ACCEPT_UDP_PORT) */
 /* accept custom port only */
-#define IP_ACCEPT_LINK_LAYER_ADDRESSED_PORT(port) (LWIP_IP_ACCEPT_UDP_PORT(port))
+#define IP_ACCEPT_LINK_LAYER_ADDRESSED_PORT(port) (LWIP_IP_ACCEPT_UDP_PORT(dst_port))
 #else /* LWIP_DHCP && defined(LWIP_IP_ACCEPT_UDP_PORT) */
 /* accept DHCP client port only */
 #define IP_ACCEPT_LINK_LAYER_ADDRESSED_PORT(port) ((port) == PP_NTOHS(DHCP_CLIENT_PORT))
@@ -125,15 +125,8 @@ ip_route(ip_addr_t *dest)
 {
   struct netif *netif;
 
-#ifdef LWIP_HOOK_IP4_ROUTE
-  netif = LWIP_HOOK_IP4_ROUTE(dest);
-  if (netif != NULL) {
-    return netif;
-  }
-#endif
-
   /* iterate through netifs */
-  for (netif = netif_list; netif != NULL; netif = netif->next) {
+  for(netif = netif_list; netif != NULL; netif = netif->next) {
     /* network mask matches? */
     if (netif_is_up(netif)) {
       if (ip_addr_netcmp(dest, &(netif->ip_addr), &(netif->netmask))) {
@@ -155,41 +148,6 @@ ip_route(ip_addr_t *dest)
 
 #if IP_FORWARD
 /**
- * Determine whether an IP address is in a reserved set of addresses
- * that may not be forwarded, or whether datagrams to that destination
- * may be forwarded.
- * @param p the packet to forward
- * @param dest the destination IP address
- * @return 1: can forward 0: discard
- */
-static int
-ip_canforward(struct pbuf *p)
-{
-  u32_t addr = ip4_addr_get_u32(ip_current_dest_addr());
-
-  if (p->flags & PBUF_FLAG_LLBCAST) {
-    /* don't route link-layer broadcasts */
-    return 0;
-  }
-  if ((p->flags & PBUF_FLAG_LLMCAST) && !IP_MULTICAST(addr)) {
-    /* don't route link-layer multicasts unless the destination address is an IP
-       multicast address */
-    return 0;
-  }
-  if (IP_EXPERIMENTAL(addr)) {
-    return 0;
-  }
-  if (IP_CLASSA(addr)) {
-    u32_t net = addr & IP_CLASSA_NET;
-    if ((net == 0) || (net == (IP_LOOPBACKNET << IP_CLASSA_NSHIFT))) {
-      /* don't route loopback packets */
-      return 0;
-    }
-  }
-  return 1;
-}
-
-/**
  * Forwards an IP packet. It finds an appropriate route for the
  * packet, decrements the TTL value of the packet, adjusts the
  * checksum and outputs the packet on the appropriate interface.
@@ -205,10 +163,6 @@ ip_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
 
   PERF_START;
 
-  if (!ip_canforward(p)) {
-    goto return_noroute;
-  }
-
   /* RFC3927 2.7: do not forward link-local addresses */
   if (ip_addr_islinklocal(&current_iphdr_dest)) {
     LWIP_DEBUGF(IP_DEBUG, ("ip_forward: not forwarding LLA %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",
@@ -223,17 +177,14 @@ ip_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
     LWIP_DEBUGF(IP_DEBUG, ("ip_forward: no forwarding route for %"U16_F".%"U16_F".%"U16_F".%"U16_F" found\n",
       ip4_addr1_16(&current_iphdr_dest), ip4_addr2_16(&current_iphdr_dest),
       ip4_addr3_16(&current_iphdr_dest), ip4_addr4_16(&current_iphdr_dest)));
-    /* @todo: send ICMP_DUR_NET? */
     goto return_noroute;
   }
-#if !IP_FORWARD_ALLOW_TX_ON_RX_NETIF
   /* Do not forward packets onto the same network interface on which
    * they arrived. */
   if (netif == inp) {
     LWIP_DEBUGF(IP_DEBUG, ("ip_forward: not bouncing packets back on incoming interface.\n"));
     goto return_noroute;
   }
-#endif /* IP_FORWARD_ALLOW_TX_ON_RX_NETIF */
 
   /* decrement TTL */
   IPH_TTL_SET(iphdr, IPH_TTL(iphdr) - 1);
@@ -265,20 +216,6 @@ ip_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
   snmp_inc_ipforwdatagrams();
 
   PERF_STOP("ip_forward");
-  /* don't fragment if interface has mtu set to 0 [loopif] */
-  if (netif->mtu && (p->tot_len > netif->mtu)) {
-    if ((IPH_OFFSET(iphdr) & PP_NTOHS(IP_DF)) == 0) {
-#if IP_FRAG
-      ip_frag(p, netif, ip_current_dest_addr());
-#else /* IP_FRAG */
-      /* @todo: send ICMP Destination Unreacheable code 13 "Communication administratively prohibited"? */
-#endif /* IP_FRAG */
-    } else {
-      /* send ICMP Destination Unreacheable code 4: "Fragmentation Needed and DF Set" */
-      icmp_dest_unreach(p, ICMP_DUR_FRAG);
-    }
-    return;
-  }
   /* transmit pbuf on chosen interface */
   netif->output(netif, p, &current_iphdr_dest);
   return;
@@ -309,7 +246,7 @@ ip_input(struct pbuf *p, struct netif *inp)
   u16_t iphdr_hlen;
   u16_t iphdr_len;
 #if IP_ACCEPT_LINK_LAYER_ADDRESSING
-  int check_ip_src=1;
+  //int check_ip_src=1;
 #endif /* IP_ACCEPT_LINK_LAYER_ADDRESSING */
 
   IP_STATS_INC(ip.recv);
@@ -326,13 +263,6 @@ ip_input(struct pbuf *p, struct netif *inp)
     snmp_inc_ipinhdrerrors();
     return ERR_OK;
   }
-
-#ifdef LWIP_HOOK_IP4_INPUT
-  if (LWIP_HOOK_IP4_INPUT(p, inp)) {
-    /* the packet has been eaten */
-    return ERR_OK;
-  }
-#endif
 
   /* obtain IP header length in number of 32-bit words */
   iphdr_hlen = IPH_HL(iphdr);
@@ -461,7 +391,7 @@ ip_input(struct pbuf *p, struct netif *inp)
       if (IP_ACCEPT_LINK_LAYER_ADDRESSED_PORT(udphdr->dest)) {
         LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_TRACE, ("ip_input: DHCP packet accepted.\n"));
         netif = inp;
-        check_ip_src = 0;
+        //check_ip_src = 0;
       }
     }
   }
@@ -470,7 +400,8 @@ ip_input(struct pbuf *p, struct netif *inp)
   /* broadcast or multicast packet source address? Compliant with RFC 1122: 3.2.1.3 */
 #if IP_ACCEPT_LINK_LAYER_ADDRESSING
   /* DHCP servers need 0.0.0.0 to be allowed as source address (RFC 1.1.2.2: 3.2.1.3/a) */
-  if (check_ip_src && !ip_addr_isany(&current_iphdr_src))
+  //if (check_ip_src && !ip_addr_isany(&current_iphdr_src))
+	if (!ip_addr_isany(&current_iphdr_src))
 #endif /* IP_ACCEPT_LINK_LAYER_ADDRESSING */
   {  if ((ip_addr_isbroadcast(&current_iphdr_src, inp)) ||
          (ip_addr_ismulticast(&current_iphdr_src))) {
@@ -558,6 +489,7 @@ ip_input(struct pbuf *p, struct netif *inp)
   if (raw_input(p, inp) == 0)
 #endif /* LWIP_RAW */
   {
+
     switch (IPH_PROTO(iphdr)) {
 #if LWIP_UDP
     case IP_PROTO_UDP:
@@ -726,10 +658,9 @@ err_t ip_output_if_opt(struct pbuf *p, ip_addr_t *src, ip_addr_t *dest,
     chk_sum += ip4_addr_get_u32(&iphdr->dest) >> 16;
 #endif /* CHECKSUM_GEN_IP_INLINE */
 
-    IPH_VHL_SET(iphdr, 4, ip_hlen / 4);
-    IPH_TOS_SET(iphdr, tos);
+    IPH_VHLTOS_SET(iphdr, 4, ip_hlen / 4, tos);
 #if CHECKSUM_GEN_IP_INLINE
-    chk_sum += LWIP_MAKE_U16(tos, iphdr->_v_hl);
+    chk_sum += iphdr->_v_hl_tos;
 #endif /* CHECKSUM_GEN_IP_INLINE */
     IPH_LEN_SET(iphdr, htons(p->tot_len));
 #if CHECKSUM_GEN_IP_INLINE
@@ -871,9 +802,9 @@ ip_output_hinted(struct pbuf *p, ip_addr_t *src, ip_addr_t *dest,
     return ERR_RTE;
   }
 
-  NETIF_SET_HWADDRHINT(netif, addr_hint);
+  netif->addr_hint = addr_hint;
   err = ip_output_if(p, src, dest, ttl, tos, proto, netif);
-  NETIF_SET_HWADDRHINT(netif, NULL);
+  netif->addr_hint = NULL;
 
   return err;
 }
@@ -887,6 +818,9 @@ void
 ip_debug_print(struct pbuf *p)
 {
   struct ip_hdr *iphdr = (struct ip_hdr *)p->payload;
+  u8_t *payload;
+
+  payload = (u8_t *)iphdr + IP_HLEN;
 
   LWIP_DEBUGF(IP_DEBUG, ("IP header:\n"));
   LWIP_DEBUGF(IP_DEBUG, ("+-------------------------------+\n"));

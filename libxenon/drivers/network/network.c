@@ -37,7 +37,7 @@ void network_init()
 #ifdef STATS
 	stats_init();
 #endif /* STATS */
-	printf(" * initializing lwip 1.4.1...\n");
+	printf(" * initializing lwip 1.4.0...\n");
 
 	last_tcp=mftb();
 	last_dhcp_fine=mftb();
@@ -49,9 +49,9 @@ void network_init()
 	IP4_ADDR(&gateway, 0,0,0,0);
 	IP4_ADDR(&ipaddr, 0,0,0,0);
 
-	lwip_init();  //lwip 1.4.1
+	lwip_init();  //lwip 1.4.0 RC2
+	//printf("ok now the NIC\n");
 
-	printf(" * initializing NIC\n");
 	if (!netif_add(&netif, &ipaddr, &netmask, &gateway, NULL, enet_init, ip_input)){
 		printf(" ! netif_add failed!\n");
 		return;

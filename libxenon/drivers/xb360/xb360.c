@@ -92,6 +92,24 @@ void print_key(char *name, unsigned char *data)
 	printf("\n");
 }
 
+void print_key_cserial(char *name, unsigned char *data)
+{
+	int i = 0;
+	printf("%s: ", name);
+	for (i = 0; i < 12; i++)
+		printf("%c", data[i]);
+	printf("\n");
+}
+
+void print_key_mserial(char *name, unsigned char *data)
+{
+	int i = 0;
+	printf("%s: ", name);
+	for (i = 0; i < 12; i++)
+		printf("%02x", data[i]);
+	printf("\n");
+}
+
 int cpu_get_key(unsigned char *data)
 {
 	*(unsigned long long*)&data[0] = xenon_secotp_read_line(3) | xenon_secotp_read_line(4);
@@ -111,7 +129,7 @@ int get_virtual_cpukey(unsigned char *data)
   if (buffer[0]==0xC0 && buffer[1]==0xFF && buffer[2]==0xFF && buffer[3]==0xFF)
   {
 	memcpy(data,&buffer[0x20],0x10);
-    	return 0;
+		return 0;
   }
   else
 	/* No Virtual Fuses were found at 0x95000*/
@@ -141,10 +159,10 @@ int kv_read(unsigned char *data, int virtualcpukey)
 		return -1;
 
 	unsigned char cpu_key[0x10];
-        if (virtualcpukey)
-            get_virtual_cpukey(cpu_key);
-        else
-            cpu_get_key(cpu_key);
+		if (virtualcpukey)
+			get_virtual_cpukey(cpu_key);
+		else
+			cpu_get_key(cpu_key);
 	//print_key("kv_read: cpu key", cpu_key);
 
 	unsigned char hmac_key[0x10];
@@ -189,16 +207,16 @@ int kv_read(unsigned char *data, int virtualcpukey)
 	HMAC_SHA1_Done(&ctx);
 
 	int index = 0;
-    while (index < 0x10)
-    {
-    	if (data[index] != out[index])
-    	{
-    		// Hmm something is wrong, hmac is not matching
-    		//printf(" ! kv_read: kv hash check failed\n");
-    		return 2;
-    	}
-    	index += 1;
-    }
+	while (index < 0x10)
+	{
+		if (data[index] != out[index])
+		{
+			// Hmm something is wrong, hmac is not matching
+			//printf(" ! kv_read: kv hash check failed\n");
+			return 2;
+		}
+		index += 1;
+	}
 
 	return 0;
 }
@@ -212,13 +230,16 @@ int kv_get_dvd_key(unsigned char *dvd_key)
 	int keylen = 0x10;
 
 	result = kv_read(buffer, 0);
-        if (result == 2 && get_virtual_cpukey(tmp) == 0){
-            printf("! Attempting to decrypt DVDKey with Virtual CPU Key !\n");
-            result = kv_read(buffer, 1);
-        }
-	if (result != 0){
+	if (result == 2 && get_virtual_cpukey(tmp) == 0)
+	{
+		printf("! Attempting to decrypt DVD Key with Virtual CPU Key !\n");
+		result = kv_read(buffer, 1);
+	}
+	if (result != 0)
+	{
 		printf(" ! kv_get_dvd_key Failure: kv_read\n");
-		if (result == 2){ //Hash failure
+		if (result == 2) //Hash failure
+		{
 			printf(" !   the hash check failed probably as a result of decryption failure\n");
 			printf(" !   make sure that the CORRECT key vault for this console is in flash\n");
 			printf(" !   the key vault should be at offset 0x4200 for a length of 0x4200\n");
@@ -228,8 +249,87 @@ int kv_get_dvd_key(unsigned char *dvd_key)
 	}
 
 	result = kv_get_key(XEKEY_DVD_KEY, dvd_key, &keylen, buffer);
-	if (result != 0){
+	if (result != 0)
+	{
 		printf(" ! kv_get_dvd_key Failure: kv_get_key %d\n", result);
+		return result;
+	}
+
+	//print_key("dvd key", dvd_key);
+	return 0;
+
+}
+
+int kv_get_cserial(unsigned char *cserial)
+{
+	if (KV_FLASH_SIZE == 0)
+		return -1; //It's bad data!
+	unsigned char buffer[KV_FLASH_SIZE], tmp[0x0C];
+	int result = 0;
+	int keylen = 0x0C;
+
+	result = kv_read(buffer, 0);
+	if (result == 2 && get_virtual_cpukey(tmp) == 0)
+	{
+		printf("! Attempting to decrypt CSerial with Virtual CPU Key !\n");
+		result = kv_read(buffer, 1);
+	}
+	if (result != 0)
+	{
+		printf(" ! kv_get_cserial Failure: kv_read\n");
+		if (result == 2) //Hash failure
+		{
+			printf(" !   the hash check failed probably as a result of decryption failure\n");
+			printf(" !   make sure that the CORRECT key vault for this console is in flash\n");
+			printf(" !   the key vault should be at offset 0x4200 for a length of 0x4200\n");
+			printf(" !   in the 'raw' flash binary from THIS console\n");
+		}
+		return 1;
+	}
+
+	result = kv_get_key(XEKEY_CONSOLE_SERIAL_NUMBER, cserial, &keylen, buffer);
+	if (result != 0)
+	{
+		printf(" ! kv_get_cserial Failure: kv_get_key %d\n", result);
+		return result;
+	}
+
+	//print_key("dvd key", dvd_key);
+	return 0;
+
+}
+
+int kv_get_mserial(unsigned char *mserial)
+{
+	if (KV_FLASH_SIZE == 0)
+		return -1; //It's bad data!
+	unsigned char buffer[KV_FLASH_SIZE], tmp[0x0C];
+	int result = 0;
+	int keylen = 0x0C;
+
+	result = kv_read(buffer, 0);
+	if (result == 2 && get_virtual_cpukey(tmp) == 0)
+	{
+		printf("! Attempting to decrypt MSerial with Virtual CPU Key !\n");
+		result = kv_read(buffer, 1);
+	}
+	if (result != 0)
+	{
+		printf(" ! kv_get_mserial Failure: kv_read\n");
+		if (result == 2) //Hash failure
+		{
+			printf(" !   the hash check failed probably as a result of decryption failure\n");
+			printf(" !   make sure that the CORRECT key vault for this console is in flash\n");
+			printf(" !   the key vault should be at offset 0x4200 for a length of 0x4200\n");
+			printf(" !   in the 'raw' flash binary from THIS console\n");
+		}
+		return 1;
+	}
+
+	result = kv_get_key(XEKEY_MOBO_SERIAL_NUMBER, mserial, &keylen, buffer);
+	if (result != 0)
+	{
+		printf(" ! kv_get_mserial Failure: kv_get_key %d\n", result);
 		return result;
 	}
 
@@ -246,20 +346,37 @@ void print_cpu_dvd_keys(void)
 
 	memset(key, '\0', sizeof(key));
 	if (cpu_get_key(key)==0)
-		print_key(" * your cpu key", key);
+		print_key(" * CPU Key", key);
 	if (xenon_logical_nand_data_ok() == 0)
 	{
 		memset(key, '\0',sizeof(key));
 		if (get_virtual_cpukey(key)==0)
-			print_key(" * your virtual cpu key", key);
+			print_key(" * Virtual CPU Key", key);
 
 		memset(key, '\0', sizeof(key));
 		if (kv_get_dvd_key(key)==0)
-			print_key(" * your dvd key", key);
+			print_key(" * DVD Key", key);
 	}
 	else
-		printf(" ! Unable to read Keyvault data from NAND\n");
-	printf("\n");
+		printf(" ! Unable to read keyvault data from NAND\n");
+}
+
+void print_serials(void)
+{
+    unsigned char serial[0x0C];
+    printf("\n");
+
+    if (xenon_logical_nand_data_ok() == 0)
+	{
+        memset(serial, '\0', sizeof (serial));
+        if (kv_get_mserial(serial) == 0)
+            print_key_mserial(" * MSerial", serial);
+        
+        memset(serial, '\0', sizeof (serial));
+        if (kv_get_cserial(serial) == 0)
+            print_key_cserial(" * CSerial", serial);
+    } else
+        printf(" ! Unable to read keyvault data from NAND\n");
 }
 
 //This version crashes... dunno why... but... old one works perfectly fine so, why change it?!
@@ -341,123 +458,123 @@ void print_cpu_dvd_keys(void)
 
 int updateXeLL(char *path)
 {
-    FILE *f;
-    int i, j, k, status, startblock, current, offsetinblock, blockcnt, filelength;
-    unsigned char *updxell, *user, *spare;
-    
-    /* Check if updxell.bin is present */
-    f = fopen(path, "rb");
-    if (!f){
-        return -1; //Can't find/open updxell.bin
-    }
-    
-    if (sfc.initialized != SFCX_INITIALIZED){
-        fclose(f);
-        printf(" ! sfcx is not initialized! Unable to update XeLL in NAND!\n");
+	FILE *f;
+	int i, j, k, status, startblock, current, offsetinblock, blockcnt, filelength;
+	unsigned char *updxell, *user, *spare;
+	
+	/* Check if updxell.bin is present */
+	f = fopen(path, "rb");
+	if (!f){
+		return -1; //Can't find/open updxell.bin
+	}
+	
+	if (sfc.initialized != SFCX_INITIALIZED){
+		fclose(f);
+		printf(" ! sfcx is not initialized! Unable to update XeLL in NAND!\n");
 	return -1;
-    }
+	}
    
-    /* Check filesize of updxell.bin, only accept full 256kb binaries */
-    fseek(f, 0, SEEK_END);
-    filelength=ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (filelength != XELL_SIZE){
-        fclose(f);
-        printf(" ! %s does not have the correct size of 256kb. Aborting update!\n", path);
-        return -1;
-    }
-    
-    printf("\n * found XeLL update. press power NOW if you don't want to update.\n");
-    delay(15);
-    
-    for (k = 0; k < XELL_OFFSET_COUNT; k++)
-    {
-      current = xelloffsets[k];
-      offsetinblock = current % sfc.block_sz;
-      startblock = current/sfc.block_sz;
-      blockcnt = offsetinblock ? (XELL_SIZE/sfc.block_sz)+1 : (XELL_SIZE/sfc.block_sz);
-      
-    
-      spare = (unsigned char*)malloc(blockcnt*sfc.pages_in_block*sfc.meta_sz);
-      if(!spare){
-        printf(" ! Error while memallocating filebuffer (spare)\n");
-        return -1;
-      }
-      user = (unsigned char*)malloc(blockcnt*sfc.block_sz);
-      if(!user){
-        printf(" ! Error while memallocating filebuffer (user)\n");
-        return -1;
-      }
-      j = 0;
-      unsigned char pagebuf[MAX_PAGE_SZ];	
+	/* Check filesize of updxell.bin, only accept full 256kb binaries */
+	fseek(f, 0, SEEK_END);
+	filelength=ftell(f);
+	fseek(f, 0, SEEK_SET);
+	if (filelength != XELL_SIZE){
+		fclose(f);
+		printf(" ! %s does not have the correct size of 256kb. Aborting update!\n", path);
+		return -1;
+	}
+	
+	printf("\n * found XeLL update. press power NOW if you don't want to update.\n");
+	delay(15);
+	
+	for (k = 0; k < XELL_OFFSET_COUNT; k++)
+	{
+	  current = xelloffsets[k];
+	  offsetinblock = current % sfc.block_sz;
+	  startblock = current/sfc.block_sz;
+	  blockcnt = offsetinblock ? (XELL_SIZE/sfc.block_sz)+1 : (XELL_SIZE/sfc.block_sz);
+	  
+	
+	  spare = (unsigned char*)malloc(blockcnt*sfc.pages_in_block*sfc.meta_sz);
+	  if(!spare){
+		printf(" ! Error while memallocating filebuffer (spare)\n");
+		return -1;
+	  }
+	  user = (unsigned char*)malloc(blockcnt*sfc.block_sz);
+	  if(!user){
+		printf(" ! Error while memallocating filebuffer (user)\n");
+		return -1;
+	  }
+	  j = 0;
+	  unsigned char pagebuf[MAX_PAGE_SZ];	
 
-      for (i = (startblock*sfc.pages_in_block); i< (startblock+blockcnt)*sfc.pages_in_block; i++)
-      {
-         sfcx_read_page(pagebuf, (i*sfc.page_sz), 1);
+	  for (i = (startblock*sfc.pages_in_block); i< (startblock+blockcnt)*sfc.pages_in_block; i++)
+	  {
+		 sfcx_read_page(pagebuf, (i*sfc.page_sz), 1);
 	 //Split rawpage into user & spare
 	 memcpy(&user[j*sfc.page_sz],pagebuf,sfc.page_sz);
 	 memcpy(&spare[j*sfc.meta_sz],&pagebuf[sfc.page_sz],sfc.meta_sz);
 	 j++;
-      }
-      
-        if (memcmp(&user[offsetinblock+(XELL_FOOTER_OFFSET)],XELL_FOOTER,XELL_FOOTER_LENGTH) == 0){
-            printf(" * XeLL Binary in NAND found @ 0x%08X\n", (startblock*sfc.block_sz)+offsetinblock);
-        
-         updxell = (unsigned char*)malloc(XELL_SIZE);
-         if(!updxell){
-           printf(" ! Error while memallocating filebuffer (updxell)\n");
-           return -1;
-         }
-        
-         status = fread(updxell,1,XELL_SIZE,f);
-         if (status != XELL_SIZE){
-           fclose(f);
-           printf(" ! Error reading file from %s\n", path);
-           return -1;
-         }
+	  }
+	  
+		if (memcmp(&user[offsetinblock+(XELL_FOOTER_OFFSET)],XELL_FOOTER,XELL_FOOTER_LENGTH) == 0){
+			printf(" * XeLL Binary in NAND found @ 0x%08X\n", (startblock*sfc.block_sz)+offsetinblock);
+		
+		 updxell = (unsigned char*)malloc(XELL_SIZE);
+		 if(!updxell){
+		   printf(" ! Error while memallocating filebuffer (updxell)\n");
+		   return -1;
+		 }
+		
+		 status = fread(updxell,1,XELL_SIZE,f);
+		 if (status != XELL_SIZE){
+		   fclose(f);
+		   printf(" ! Error reading file from %s\n", path);
+		   return -1;
+		 }
 		 
 		 if (memcmp(&updxell[XELL_FOOTER_OFFSET],XELL_FOOTER, XELL_FOOTER_LENGTH)){
 	   printf(" ! XeLL does not seem to have matching footer, Aborting update!\n");
 	   return -1;
 	 }
-         
-         fclose(f);
-         memcpy(&user[offsetinblock], updxell,XELL_SIZE); //Copy over updxell.bin
-         printf(" * Writing to NAND!\n");
+		 
+		 fclose(f);
+		 memcpy(&user[offsetinblock], updxell,XELL_SIZE); //Copy over updxell.bin
+		 printf(" * Writing to NAND!\n");
 	 j = 0;
-         for (i = startblock*sfc.pages_in_block; i < (startblock+blockcnt)*sfc.pages_in_block; i ++)
-         {
-	     if (!(i%sfc.pages_in_block))
+		 for (i = startblock*sfc.pages_in_block; i < (startblock+blockcnt)*sfc.pages_in_block; i ++)
+		 {
+		 if (!(i%sfc.pages_in_block))
 		sfcx_erase_block(i*sfc.page_sz);
 
-	     /* Copy user & spare data together in a single rawpage */
-             memcpy(pagebuf,&user[j*sfc.page_sz],sfc.page_sz);
-	     memcpy(&pagebuf[sfc.page_sz],&spare[j*sfc.meta_sz],sfc.meta_sz);
-	     j++;
+		 /* Copy user & spare data together in a single rawpage */
+			 memcpy(pagebuf,&user[j*sfc.page_sz],sfc.page_sz);
+		 memcpy(&pagebuf[sfc.page_sz],&spare[j*sfc.meta_sz],sfc.meta_sz);
+		 j++;
 
-	     if (!(sfcx_is_pageerased(pagebuf))) // We dont need to write to erased pages
-	     {
-             memset(&pagebuf[sfc.page_sz+0x0C],0x0, 4); //zero only EDC bytes
-             sfcx_calcecc((unsigned int *)pagebuf); 	  //recalc EDC bytes
-             sfcx_write_page(pagebuf, i*sfc.page_sz);
-	     }
-         }
-         printf(" * XeLL flashed! Reboot the xbox to enjoy the new build\n");
+		 if (!(sfcx_is_pageerased(pagebuf))) // We dont need to write to erased pages
+		 {
+			 memset(&pagebuf[sfc.page_sz+0x0C],0x0, 4); //zero only EDC bytes
+			 sfcx_calcecc((unsigned int *)pagebuf); 	  //recalc EDC bytes
+			 sfcx_write_page(pagebuf, i*sfc.page_sz);
+		 }
+		 }
+		 printf(" * XeLL flashed! Reboot the xbox to enjoy the new build\n");
 	 for(;;);
 	
-      }
-    }
-    printf(" ! Couldn't locate XeLL binary in NAND. Aborting!\n");
-    return -1;
+	  }
+	}
+	printf(" ! Couldn't locate XeLL binary in NAND. Aborting!\n");
+	return -1;
 }
 
 unsigned int xenon_get_DVE()
 {
 	unsigned int DVEversion, tmp;
 	xenon_smc_ana_read(0xfe, &DVEversion);
-    tmp = DVEversion;
-    tmp = (tmp & ~0xF0) | ((DVEversion >> 12) & 0xF0);
-    return (tmp & 0xFF);
+	tmp = DVEversion;
+	tmp = (tmp & ~0xF0) | ((DVEversion >> 12) & 0xF0);
+	return (tmp & 0xFF);
 }
 
 unsigned int xenon_get_PCIBridgeRevisionID()
@@ -479,15 +596,15 @@ unsigned int xenon_get_XenosID()
 
 int xenon_get_console_type()
 {
-    unsigned int PVR, PCIBridgeRevisionID, consoleVersion, DVEversion;
-    
-    PCIBridgeRevisionID = xenon_get_PCIBridgeRevisionID();
-    consoleVersion = xenon_get_XenosID();
-    DVEversion = xenon_get_DVE();
-    PVR = xenon_get_CPU_PVR();
+	unsigned int PVR, PCIBridgeRevisionID, consoleVersion, DVEversion;
+	
+	PCIBridgeRevisionID = xenon_get_PCIBridgeRevisionID();
+	consoleVersion = xenon_get_XenosID();
+	DVEversion = xenon_get_DVE();
+	PVR = xenon_get_CPU_PVR();
 	if(PVR == 0x710200 || PVR == 0x710300) //TODO: Add XenosID check also!
 		return REV_ZEPHYR;
-    if(consoleVersion < 0x5821)
+	if(consoleVersion < 0x5821)
 		return REV_XENON;
 	else if(consoleVersion >= 0x5821 && consoleVersion < 0x5831)
 	{
@@ -509,7 +626,7 @@ int xenon_get_console_type()
 	}
 	else if(consoleVersion >= 0x5851)
 		return REV_WINCHESTER;
-    return REV_UNKNOWN;
+	return REV_UNKNOWN;
 }
 
 int xenon_logical_nand_data_ok()

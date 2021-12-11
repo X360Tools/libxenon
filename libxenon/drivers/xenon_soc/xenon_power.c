@@ -241,23 +241,23 @@ void xenon_make_it_faster(int speed)
 		return;
 	}
 	
-	printf(" * Make it faster by making it sleep...\n");
+	//printf(" * Make it faster by making it sleep...\n");
 
 	xenon_set_single_thread_mode();
 
-	printf(" * Make it faster by making it consume more power...\n");
+	//printf(" * Make it faster by making it consume more power...\n");
 
 	xenon_smc_set_fan_algorithm(1);
 
 	xenon_set_speed(speed,delta);
 
-	printf(" * Make it faster by awaking the other cores...\n");
+	//printf(" * Make it faster by awaking the other cores...\n");
 	wakeup_cpus();
 
 	for (i = 1; i < 6; ++i)
 		while (thread_state[i])
 			xenon_yield();
-	printf(" * fine, they all came back.\n");
+	printf(" * setting CPU speed to full\n");
 }
 
 void xenon_thread_startup(void)

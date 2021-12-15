@@ -163,7 +163,7 @@ void xenon_set_speed(int new_speed, int vid_delta)
 
 		int vlt = 11000 + (0x3D - ((new_vid < 0x15) ? new_vid + 0x3E : new_vid)) * 125;
 
-		printf(" * using new VID: %02x (%d.%04dV)\n", new_vid, vlt / 10000, vlt % 10000);
+		printf(" * set new VID: %02x (%d.%04dV)\n", new_vid, vlt / 10000, vlt % 10000);
 	}
 
 	v &= ~0xBF08ULL;
@@ -228,7 +228,7 @@ void xenon_make_it_faster(int speed)
 	int i,delta;
 	
 	if (xenon_get_speed()==speed){
-		printf(" * Starting threads only, CPU was already made faster !\n");
+		printf(" * CPU speed already full, starting threads\n");
 		xenon_thread_startup();
 		return;
 	}
@@ -237,7 +237,7 @@ void xenon_make_it_faster(int speed)
 	delta=xenon_config_get_vid_delta();
 	
 	if (delta<0){
-		printf(" !!! could not read VID delta, aborting\n");
+		printf(" !!! could not read VID delta, aborting CPU speed change\n");
 		return;
 	}
 	
@@ -257,7 +257,7 @@ void xenon_make_it_faster(int speed)
 	for (i = 1; i < 6; ++i)
 		while (thread_state[i])
 			xenon_yield();
-	printf(" * setting CPU speed to full\n");
+	printf(" * set CPU speed to full\n");
 }
 
 void xenon_thread_startup(void)

@@ -1,5 +1,6 @@
 .section ".elfldr"
 
+#include <ppc/asm.h>
 #include <ppc/xenonsprs.h>
 
 // NOTE: All code in this file is relocated. In order to access any static data,
